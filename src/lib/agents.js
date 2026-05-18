@@ -7,6 +7,7 @@ export const AGENTS = [
     description: 'Analyzes datasets, generates insights and visualizations from World Bank open data sources. Capable of multi-country comparisons, trend analysis, and automated report generation.',
     status: 'active',
     approval_status: 'Approved',
+    data_classification: 'Official Use Only',
     allowed_user_roles: ['Economist', 'Data Scientist', 'Research Analyst', 'TTL'],
     skills: [
       'Time-series trend analysis',
@@ -66,6 +67,12 @@ export const AGENTS = [
     },
     timeout_seconds: 120,
     system_prompt: 'You are a data analysis expert specializing in World Bank development data. Your outputs must be accurate, cite sources, and follow World Bank data governance standards.',
+    audit_log: [
+      { event: 'created',   actor: 'admin@worldbank.org',         timestamp: '2024-03-01T09:00:00Z', delta: { version: '1.0.0', status: 'active', approval_status: 'Pending' } },
+      { event: 'updated',   actor: 'ddg-lead@worldbank.org',      timestamp: '2024-06-15T14:22:00Z', delta: { version: '2.0.0', skills: '+Statistical regression modeling' } },
+      { event: 'approved',  actor: 'governance@worldbank.org',    timestamp: '2024-07-01T11:10:00Z', delta: { approval_status: 'Pending → Approved' } },
+      { event: 'updated',   actor: 'ddg-lead@worldbank.org',      timestamp: '2025-01-10T08:45:00Z', delta: { version: '2.4.1', runtime_config: 'model gpt-4 → gpt-4o' } },
+    ],
   },
   {
     id: 'agt-wb-002',
@@ -75,6 +82,7 @@ export const AGENTS = [
     description: 'Researches policy documents, synthesizes findings across World Bank reports and publications, and generates evidence-based policy briefs aligned with Bank operational standards.',
     status: 'active',
     approval_status: 'Approved',
+    data_classification: 'Confidential',
     allowed_user_roles: ['Policy Analyst', 'Economist', 'TTL', 'Sector Specialist', 'VP'],
     skills: [
       'Policy document synthesis',
@@ -129,5 +137,11 @@ export const AGENTS = [
     },
     timeout_seconds: 180,
     system_prompt: 'You are a policy research expert with deep knowledge of World Bank policy frameworks. Your outputs must be evidence-based, properly cited, and aligned with World Bank operational standards.',
+    audit_log: [
+      { event: 'created',   actor: 'admin@worldbank.org',         timestamp: '2024-05-12T10:00:00Z', delta: { version: '1.0.0', status: 'active', approval_status: 'Pending' } },
+      { event: 'updated',   actor: 'dec-team@worldbank.org',      timestamp: '2024-08-20T13:05:00Z', delta: { version: '1.5.0', tools_used: '+Text Summarizer' } },
+      { event: 'approved',  actor: 'governance@worldbank.org',    timestamp: '2024-09-03T09:30:00Z', delta: { approval_status: 'Pending → Approved' } },
+      { event: 'updated',   actor: 'dec-team@worldbank.org',      timestamp: '2025-02-18T16:00:00Z', delta: { version: '1.8.0', memory_settings: 'type sliding_window → vector_store' } },
+    ],
   },
 ]

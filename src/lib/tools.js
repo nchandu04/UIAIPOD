@@ -5,6 +5,7 @@ export const TOOLS = [
     version: '2.0',
     category: 'Data',
     status: 'active',
+    system_affiliation: 'Dataverse',
     description: 'Access World Bank Open Data API for development indicators, country statistics, and project data across 217 economies.',
     maintainer: 'Development Data Group (DDG)',
     input_schema: {
@@ -63,6 +64,7 @@ export const TOOLS = [
     version: '1.3',
     category: 'Document',
     status: 'active',
+    system_affiliation: 'SharePoint',
     description: 'Extract, parse, and semantically chunk text from PDF documents including World Bank reports, policy briefs, and working papers. Supports OCR for scanned documents.',
     maintainer: 'ITS Infrastructure Team',
     input_schema: {

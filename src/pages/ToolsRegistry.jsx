@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { TOOLS } from '../lib/tools'
-import { Wrench, Code, ChevronRight, X, Shield, CircleAlert as AlertCircle, BookOpen, Tag, CircleCheck as CheckCircle, Search, Plus } from 'lucide-react'
+import { Wrench, Code, ChevronRight, X, Shield, CircleAlert as AlertCircle, BookOpen, Tag, CircleCheck as CheckCircle, Search, Plus, Building2 } from 'lucide-react'
 
 const CATEGORY_COLORS = {
   Data: 'bg-[#e8f4fc] text-[#0063a3]',
@@ -25,11 +25,24 @@ const CATEGORY_OPTIONS = ['Data', 'Document', 'Research', 'Visualization', 'NLP'
 const AUTH_OPTIONS = ['none', 'bearer', 'api_key', 'basic', 'oauth2']
 const STATUS_OPTIONS = ['active', 'inactive']
 
+const SYSTEM_AFFILIATION_OPTIONS = ['Dataverse', 'SharePoint', 'SAP', 'Azure AI Search', 'Power Platform', 'AWS', 'Other']
+
+const SYSTEM_AFFILIATION_COLORS = {
+  'Dataverse':        'bg-[#e8f4fc] text-[#0063a3]',
+  'SharePoint':       'bg-[#e6f7ee] text-[#00a651]',
+  'SAP':              'bg-[#fff8e6] text-[#c07800]',
+  'Azure AI Search':  'bg-[#e8f4fc] text-[#005fa3]',
+  'Power Platform':   'bg-[#fdf2f1] text-[#c0392b]',
+  'AWS':              'bg-[#fff3e6] text-[#b85c00]',
+  'Other':            'bg-[#f0f4f8] text-[#5c6670]',
+}
+
 const EMPTY_TOOL = {
   name: '',
   version: '1.0',
   category: 'Data',
   status: 'active',
+  system_affiliation: '',
   description: '',
   maintainer: '',
   input_schema: {},
@@ -101,6 +114,12 @@ function ToolDrawer({ tool, onClose }) {
               auth: {tool.authentication?.type}
             </span>
             <span className="px-2.5 py-1 rounded-full bg-[#e6f7ee]/20 text-[#4cc180] text-xs font-semibold capitalize">{tool.status}</span>
+            {tool.system_affiliation && (
+              <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${SYSTEM_AFFILIATION_COLORS[tool.system_affiliation] || SYSTEM_AFFILIATION_COLORS['Other']}`}>
+                <Building2 className="w-2.5 h-2.5" />
+                {tool.system_affiliation}
+              </span>
+            )}
           </div>
         </div>
 
@@ -117,6 +136,15 @@ function ToolDrawer({ tool, onClose }) {
                   <p className="text-[10px] font-semibold text-[#8a95a0] uppercase tracking-wider mb-0.5">Version</p>
                   <p className="text-sm font-medium text-[#1a2430]">v{tool.version}</p>
                 </div>
+                {tool.system_affiliation && (
+                  <div className="col-span-2 bg-[#f8f9fa] border border-[#eef0f2] rounded-lg px-3 py-2">
+                    <p className="text-[10px] font-semibold text-[#8a95a0] uppercase tracking-wider mb-1">System Affiliation</p>
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${SYSTEM_AFFILIATION_COLORS[tool.system_affiliation] || SYSTEM_AFFILIATION_COLORS['Other']}`}>
+                      <Building2 className="w-3 h-3" />
+                      {tool.system_affiliation}
+                    </span>
+                  </div>
+                )}
               </div>
               {tool.tags && (
                 <div className="flex flex-wrap gap-1.5">
@@ -340,6 +368,20 @@ function AddToolModal({ onClose, onAdd }) {
               </div>
 
               <div>
+                <label className="block text-xs font-semibold text-[#3d4a55] mb-1.5 flex items-center gap-1">
+                  <Building2 className="w-3 h-3 text-[#0063a3]" /> System Affiliation
+                </label>
+                <select
+                  value={form.system_affiliation}
+                  onChange={e => set('system_affiliation', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-[#d8dde2] rounded-lg focus:outline-none focus:border-[#009fda] focus:ring-1 focus:ring-[#009fda]/20 text-[#1a2430] bg-white"
+                >
+                  <option value="">None</option>
+                  {SYSTEM_AFFILIATION_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-xs font-semibold text-[#3d4a55] mb-1.5">Status</label>
                 <select
                   value={form.status}
@@ -474,6 +516,12 @@ function ToolCard({ tool, onSelect }) {
             <Shield className="w-2.5 h-2.5" />
             {tool.authentication?.type === 'none' ? 'Public' : tool.authentication?.type}
           </span>
+          {tool.system_affiliation && (
+            <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${SYSTEM_AFFILIATION_COLORS[tool.system_affiliation] || SYSTEM_AFFILIATION_COLORS['Other']}`}>
+              <Building2 className="w-2.5 h-2.5" />
+              {tool.system_affiliation}
+            </span>
+          )}
           {tool.rate_limits?.requests_per_minute && (
             <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#f0f4f8] text-[#3d4a55]">
               {tool.rate_limits.requests_per_minute} req/min

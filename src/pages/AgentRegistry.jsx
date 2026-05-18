@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AGENTS } from '../lib/agents'
-import { Bot, MessageSquare, ChevronDown, ChevronUp, X, ChevronRight, Shield, Cpu, Clock, Users, Wrench, Brain, Zap, FileCode, ArrowUpRight, Tag, CircleCheck as CheckCircle, Search, Plus, CircleAlert as AlertCircle } from 'lucide-react'
+import { Bot, MessageSquare, ChevronDown, ChevronUp, X, ChevronRight, Shield, Cpu, Clock, Users, Wrench, Brain, Zap, FileCode, ArrowUpRight, Tag, CircleCheck as CheckCircle, Search, Plus, CircleAlert as AlertCircle, History, Lock } from 'lucide-react'
 
 const APPROVAL_COLORS = {
   Approved: 'bg-[#e6f7ee] text-[#00a651]',
@@ -11,6 +11,23 @@ const APPROVAL_COLORS = {
 
 const APPROVAL_OPTIONS = ['Approved', 'Pending', 'Rejected']
 const STATUS_OPTIONS = ['active', 'inactive']
+const DATA_CLASSIFICATION_OPTIONS = ['Public', 'Official Use Only', 'Confidential', 'Strictly Confidential']
+
+const DATA_CLASSIFICATION_COLORS = {
+  'Public': 'bg-[#e6f7ee] text-[#00a651]',
+  'Official Use Only': 'bg-[#e8f4fc] text-[#0063a3]',
+  'Confidential': 'bg-[#fff8e6] text-[#c07800]',
+  'Strictly Confidential': 'bg-[#fdf2f1] text-[#c0392b]',
+}
+
+const AUDIT_EVENT_COLORS = {
+  created:   'bg-[#e8f4fc] text-[#0063a3]',
+  updated:   'bg-[#fff8e6] text-[#c07800]',
+  approved:  'bg-[#e6f7ee] text-[#00a651]',
+  rejected:  'bg-[#fdf2f1] text-[#c0392b]',
+  deprecated:'bg-[#f0f4f8] text-[#5c6670]',
+  promoted:  'bg-[#e6f7ee] text-[#00a651]',
+}
 
 const EMPTY_AGENT = {
   name: '',
@@ -19,6 +36,7 @@ const EMPTY_AGENT = {
   description: '',
   status: 'active',
   approval_status: 'Pending',
+  data_classification: 'Official Use Only',
   allowed_user_roles: [],
   skills: [],
   supported_intents: [],
@@ -28,6 +46,7 @@ const EMPTY_AGENT = {
   tools_used: [],
   memory_settings: {},
   timeout_seconds: 60,
+  audit_log: [],
 }
 
 function Section({ icon: Icon, title, children }) {
@@ -85,6 +104,12 @@ function AgentDrawer({ agent, onClose, onChat }) {
               {agent.approval_status}
             </span>
             <span className="px-2.5 py-1 rounded-full bg-[#e6f7ee]/20 text-[#4cc180] text-xs font-semibold capitalize">{agent.status}</span>
+            {agent.data_classification && (
+              <span className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${DATA_CLASSIFICATION_COLORS[agent.data_classification] || 'bg-[#f0f4f8] text-[#5c6670]'}`}>
+                <Lock className="w-2.5 h-2.5" />
+                {agent.data_classification}
+              </span>
+            )}
           </div>
         </div>
 
@@ -102,6 +127,15 @@ function AgentDrawer({ agent, onClose, onChat }) {
                   <p className="text-sm text-[#1a2430] font-medium">{value}</p>
                 </div>
               ))}
+              {agent.data_classification && (
+                <div>
+                  <p className="text-[10px] font-semibold text-[#8a95a0] uppercase tracking-wider mb-0.5">Data Classification</p>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${DATA_CLASSIFICATION_COLORS[agent.data_classification] || 'bg-[#f0f4f8] text-[#5c6670]'}`}>
+                    <Lock className="w-2.5 h-2.5" />
+                    {agent.data_classification}
+                  </span>
+                </div>
+              )}
               <div className="col-span-2">
                 <p className="text-[10px] font-semibold text-[#8a95a0] uppercase tracking-wider mb-1">Description</p>
                 <p className="text-sm text-[#3d4a55] leading-relaxed">{agent.description}</p>
@@ -194,6 +228,35 @@ function AgentDrawer({ agent, onClose, onChat }) {
               </div>
             </div>
           </Section>
+
+          {agent.audit_log && agent.audit_log.length > 0 && (
+            <Section icon={History} title="Audit & Version History">
+              <div className="space-y-2">
+                {[...agent.audit_log].reverse().map((entry, i) => (
+                  <div key={i} className="flex items-start gap-3 py-2 border-b border-[#f0f4f8] last:border-0">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${AUDIT_EVENT_COLORS[entry.event] || 'bg-[#f0f4f8] text-[#5c6670]'}`}>
+                        {entry.event}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-[#1a2430] truncate">{entry.actor}</p>
+                      {entry.delta && (
+                        <p className="text-[11px] text-[#5c6670] mt-0.5">
+                          {typeof entry.delta === 'object'
+                            ? Object.entries(entry.delta).map(([k, v]) => `${k}: ${v}`).join(' · ')
+                            : String(entry.delta)}
+                        </p>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-[#8a95a0] font-mono flex-shrink-0">
+                      {new Date(entry.timestamp).toLocaleDateString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
         </div>
 
         <div className="flex-shrink-0 px-5 py-4 border-t border-[#eef0f2] bg-white">
@@ -373,6 +436,19 @@ function AddAgentModal({ onClose, onAdd }) {
               </div>
 
               <div>
+                <label className="block text-xs font-semibold text-[#3d4a55] mb-1.5 flex items-center gap-1">
+                  <Lock className="w-3 h-3 text-[#0063a3]" /> Data Classification
+                </label>
+                <select
+                  value={form.data_classification}
+                  onChange={e => set('data_classification', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-[#d8dde2] rounded-lg focus:outline-none focus:border-[#009fda] focus:ring-1 focus:ring-[#009fda]/20 text-[#1a2430] bg-white"
+                >
+                  {DATA_CLASSIFICATION_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-xs font-semibold text-[#3d4a55] mb-1.5">Timeout (seconds)</label>
                 <input
                   type="number"
@@ -465,6 +541,12 @@ function AgentCard({ agent, onSelect, onChat }) {
             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#e6f7ee] text-[#00a651] uppercase tracking-wide">
               {agent.status}
             </span>
+            {agent.data_classification && (
+              <span className={`flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${DATA_CLASSIFICATION_COLORS[agent.data_classification] || 'bg-[#f0f4f8] text-[#5c6670]'}`}>
+                <Lock className="w-2.5 h-2.5" />
+                {agent.data_classification}
+              </span>
+            )}
           </div>
         </div>
 
@@ -529,7 +611,18 @@ export default function AgentRegistry() {
   }
 
   const handleAdd = (agent) => {
-    setAgents(prev => [agent, ...prev])
+    const withAudit = {
+      ...agent,
+      audit_log: [
+        {
+          event: 'created',
+          actor: 'current-user@worldbank.org',
+          timestamp: new Date().toISOString(),
+          delta: { version: agent.version, status: agent.status, approval_status: agent.approval_status },
+        },
+      ],
+    }
+    setAgents(prev => [withAudit, ...prev])
   }
 
   const filtered = useMemo(() => {

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AGENTS } from '../lib/agents'
 import {
-  Send, Bot, User, ChevronDown, ChevronRight,
+  Send, Bot, User, Users, ChevronDown, ChevronRight,
   CircleCheck as CheckCircle, Clock, Zap, MessageSquare,
   TriangleAlert as AlertTriangle, ArrowLeft, Terminal,
   Activity, Check, X, ChartBar as BarChart2, Timer, RefreshCw,
@@ -10,6 +10,7 @@ import {
 
 const PIPELINE_TEMPLATES = [
   { step: 'Input Validation',   duration: 300,  type: 'system'    },
+  { step: 'Agent Routing',      duration: 500,  type: 'routing'   },
   { step: 'Context Retrieval',  duration: 800,  type: 'retrieval' },
   { step: 'Tool Planning',      duration: 600,  type: 'planning'  },
   { step: 'Tool Execution',     duration: 1400, type: 'tool'      },
@@ -17,12 +18,15 @@ const PIPELINE_TEMPLATES = [
   { step: 'Safety Check',       duration: 400,  type: 'safety'    },
 ]
 
+const CONFIDENCE_THRESHOLD = 0.72
+
 const STEP_TYPE_COLORS = {
   system:    'text-[#8a95a0] bg-[#f0f4f8]',
+  routing:   'text-[#005fa3] bg-[#dceef9]',
   retrieval: 'text-[#0063a3] bg-[#e8f4fc]',
   planning:  'text-[#c07800] bg-[#fff8e6]',
   tool:      'text-[#00a651] bg-[#e6f7ee]',
-  synthesis: 'text-[#5b4fc0] bg-[#f3f0fc]',
+  synthesis: 'text-[#3d6b3a] bg-[#d8f0d5]',
   safety:    'text-[#c0392b] bg-[#fdf2f1]',
 }
 
@@ -30,9 +34,26 @@ function randomBetween(a, b) {
   return Math.floor(Math.random() * (b - a + 1)) + a
 }
 
+function generateRoutingDecision(agentName) {
+  const score = parseFloat((0.60 + Math.random() * 0.38).toFixed(2))
+  const candidates = [
+    { name: agentName,             score,                                  selected: true  },
+    { name: 'Policy Research Agent', score: parseFloat((score - 0.12 - Math.random() * 0.1).toFixed(2)), selected: false },
+    { name: 'Data Analyst Agent',    score: parseFloat((score - 0.22 - Math.random() * 0.1).toFixed(2)), selected: false },
+  ].filter((c, i, arr) => arr.findIndex(x => x.name === c.name) === i)
+   .sort((a, b) => b.score - a.score)
+
+  const rationale = score >= CONFIDENCE_THRESHOLD
+    ? `Selected "${agentName}" (score ${score}) — highest capability match for detected intent. Routing confidence above threshold (${CONFIDENCE_THRESHOLD}).`
+    : `Low confidence routing (score ${score} < threshold ${CONFIDENCE_THRESHOLD}). Escalation recommended — intent ambiguous across multiple agents.`
+
+  return { candidates, selectedScore: score, rationale, belowThreshold: score < CONFIDENCE_THRESHOLD }
+}
+
 function buildSteps(agentName) {
   const details = {
     system:    'Parsing user input, checking permissions, validating session context.',
+    routing:   `Classifying intent and scoring candidate agents from Agent Registry.`,
     retrieval: `Retrieving relevant context from knowledge base for ${agentName}.`,
     planning:  'Analyzing query intent. Selecting optimal tools from available registry.',
     tool:      'Calling external APIs and processing data sources.',
@@ -123,6 +144,97 @@ function ProcessLogPanel({ steps, isRunning }) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ---- Routing Decision Panel ----
+function RoutingDecisionPanel({ routing }) {
+  const [open, setOpen] = useState(true)
+  const { candidates, rationale, belowThreshold } = routing
+
+  return (
+    <div className={`border rounded-xl overflow-hidden bg-white shadow-sm fade-in ${belowThreshold ? 'border-[#f5a623]' : 'border-[#d8dde2]'}`}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`w-full flex items-center justify-between px-4 py-3 transition-colors ${belowThreshold ? 'bg-[#fffbf0] hover:bg-[#fff3d0]' : 'bg-[#f8f9fa] hover:bg-[#eef0f2]'}`}
+      >
+        <div className="flex items-center gap-2">
+          <Activity className="w-4 h-4 text-[#0063a3]" />
+          <span className="text-sm font-semibold text-[#002244]">Routing Decision</span>
+          {belowThreshold && (
+            <span className="flex items-center gap-1 text-xs text-[#c07800] ml-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#f5a623]" />
+              Low Confidence
+            </span>
+          )}
+        </div>
+        {open ? <ChevronDown className="w-4 h-4 text-[#8a95a0]" /> : <ChevronRight className="w-4 h-4 text-[#8a95a0]" />}
+      </button>
+      {open && (
+        <div className="p-4 space-y-3">
+          <div className="space-y-2">
+            {candidates.map((c, i) => (
+              <div key={i} className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${c.selected ? 'border-[#009fda] bg-[#f0f8ff]' : 'border-[#eef0f2] bg-[#fafbfc]'}`}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-semibold truncate ${c.selected ? 'text-[#002244]' : 'text-[#5c6670]'}`}>{c.name}</span>
+                    {c.selected && (
+                      <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#009fda] text-white">SELECTED</span>
+                    )}
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <div className="flex-1 h-1.5 bg-[#eef0f2] rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${c.selected ? 'bg-[#009fda]' : 'bg-[#b0b8c1]'}`}
+                        style={{ width: `${Math.round(c.score * 100)}%` }}
+                      />
+                    </div>
+                    <span className={`text-[11px] font-bold w-10 text-right ${c.score >= CONFIDENCE_THRESHOLD ? 'text-[#00a651]' : 'text-[#c0392b]'}`}>
+                      {Math.round(c.score * 100)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className={`rounded-lg px-3 py-2 text-xs leading-relaxed ${belowThreshold ? 'bg-[#fff8e6] text-[#7a4e00] border border-[#f5a623]/30' : 'bg-[#f0f8ff] text-[#1a3a5c] border border-[#009fda]/20'}`}>
+            <span className="font-semibold">Rationale: </span>{rationale}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---- Escalation Panel ----
+function EscalationPanel({ routing, onEscalate, onProceed }) {
+  return (
+    <div className="border-2 border-[#f5a623] rounded-xl bg-[#fffbf0] shadow-sm fade-in overflow-hidden">
+      <div className="px-4 py-3 bg-[#f5a623]/10 border-b border-[#f5a623]/30 flex items-center gap-2">
+        <AlertTriangle className="w-4 h-4 text-[#c07800]" />
+        <span className="text-sm font-semibold text-[#7a4e00]">Low Confidence — Human Escalation Required</span>
+        <span className="ml-auto text-xs text-[#a06800]">Score &lt; {Math.round(CONFIDENCE_THRESHOLD * 100)}%</span>
+      </div>
+      <div className="p-4">
+        <p className="text-xs text-[#5c6670] mb-4">
+          The router could not confidently match this request to an agent (confidence score below {Math.round(CONFIDENCE_THRESHOLD * 100)}%). Please choose how to proceed:
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onProceed}
+            className="flex items-center gap-2 px-4 py-2 bg-[#009fda] text-white text-sm font-semibold rounded-lg hover:bg-[#0087bf] transition-colors flex-1 justify-center"
+          >
+            <Check className="w-4 h-4" /> Proceed Anyway
+          </button>
+          <button
+            onClick={onEscalate}
+            className="flex items-center gap-2 px-4 py-2 bg-[#002244] text-white text-sm font-semibold rounded-lg hover:bg-[#003366] transition-colors flex-1 justify-center"
+          >
+            <Users className="w-4 h-4" /> Escalate to Operator
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -293,6 +405,9 @@ export default function ChatTerminal() {
   const [hitlPending, setHitlPending] = useState(null)
   const [hitlDecision, setHitlDecision] = useState(null)
   const [showMetrics, setShowMetrics] = useState(false)
+  const [routingDecision, setRoutingDecision] = useState(null)
+  const [escalationPending, setEscalationPending] = useState(false)
+  const [pendingTurnText, setPendingTurnText] = useState(null)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
   const didInit = useRef(false)
@@ -326,12 +441,11 @@ export default function ChatTerminal() {
     return list
   }
 
-  const runTurn = useCallback(async (text) => {
+  const executeTurn = useCallback(async (text) => {
     setProcessing(true)
     setHitlPending(null)
     setHitlDecision(null)
-
-    addMsg('user', text)
+    setEscalationPending(false)
 
     const steps = buildSteps(agent.name)
     setProcessSteps(steps)
@@ -342,8 +456,45 @@ export default function ChatTerminal() {
     setProcessing(false)
   }, [agent])
 
+  const runTurn = useCallback(async (text) => {
+    setHitlPending(null)
+    setHitlDecision(null)
+    setEscalationPending(false)
+    setRoutingDecision(null)
+    setPendingTurnText(null)
+
+    addMsg('user', text)
+
+    const routing = generateRoutingDecision(agent.name)
+    setRoutingDecision(routing)
+
+    if (routing.belowThreshold) {
+      setPendingTurnText(text)
+      setEscalationPending(true)
+      return
+    }
+
+    await executeTurn(text)
+  }, [agent, executeTurn])
+
+  const handleEscalationProceed = useCallback(async () => {
+    setEscalationPending(false)
+    if (pendingTurnText) await executeTurn(pendingTurnText)
+  }, [pendingTurnText, executeTurn])
+
+  const handleEscalationEscalate = useCallback(() => {
+    setEscalationPending(false)
+    setMessages(prev => [...prev, {
+      id: crypto.randomUUID(), role: 'system',
+      content: 'Request escalated to a human operator. A specialist will review and respond.',
+      createdAt: Date.now(),
+    }])
+    setProcessSteps([])
+    setRoutingDecision(null)
+  }, [])
+
   const handleSend = () => {
-    if (!input.trim() || processing || hitlPending) return
+    if (!input.trim() || processing || hitlPending || escalationPending) return
     const text = input.trim()
     setInput('')
     runTurn(text)
@@ -370,6 +521,7 @@ export default function ChatTerminal() {
     setHitlDecision({ decision: 'rejected', notes })
     setHitlPending(null)
     setProcessSteps([])
+    setRoutingDecision(null)
   }
 
   return (
@@ -442,6 +594,18 @@ export default function ChatTerminal() {
           )
         )}
 
+        {routingDecision && (
+          <RoutingDecisionPanel routing={routingDecision} />
+        )}
+
+        {escalationPending && (
+          <EscalationPanel
+            routing={routingDecision}
+            onProceed={handleEscalationProceed}
+            onEscalate={handleEscalationEscalate}
+          />
+        )}
+
         {processSteps.length > 0 && (
           <ProcessLogPanel steps={processSteps} isRunning={processing} />
         )}
@@ -472,7 +636,7 @@ export default function ChatTerminal() {
 
       {/* Input */}
       <div className={`flex items-end gap-3 bg-white border rounded-xl shadow-sm p-3 transition-all ${
-        hitlPending
+        hitlPending || escalationPending
           ? 'opacity-50 pointer-events-none border-[#d8dde2]'
           : 'border-[#d8dde2] focus-within:border-[#009fda] focus-within:ring-2 focus-within:ring-[#009fda]/20'
       }`}>
@@ -481,10 +645,11 @@ export default function ChatTerminal() {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          disabled={processing || !!hitlPending}
+          disabled={processing || !!hitlPending || escalationPending}
           placeholder={
-            hitlPending ? 'Waiting for human review...' :
-            processing   ? 'Processing...' :
+            escalationPending ? 'Awaiting escalation decision...' :
+            hitlPending       ? 'Waiting for human review...' :
+            processing        ? 'Processing...' :
             `Message ${agent.name}...`
           }
           rows={2}
@@ -492,9 +657,9 @@ export default function ChatTerminal() {
         />
         <button
           onClick={handleSend}
-          disabled={!input.trim() || processing || !!hitlPending}
+          disabled={!input.trim() || processing || !!hitlPending || escalationPending}
           className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-            input.trim() && !processing && !hitlPending
+            input.trim() && !processing && !hitlPending && !escalationPending
               ? 'bg-[#009fda] text-white hover:bg-[#0087bf] shadow-sm'
               : 'bg-[#d8dde2] text-[#8a95a0] cursor-not-allowed'
           }`}
