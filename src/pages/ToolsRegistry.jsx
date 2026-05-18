@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { TOOLS } from '../lib/tools'
-import { Wrench, Code, ChevronRight, X, Shield, CircleAlert as AlertCircle, BookOpen, Tag, CircleCheck as CheckCircle } from 'lucide-react'
+import { Wrench, Code, ChevronRight, X, Shield, CircleAlert as AlertCircle, BookOpen, Tag, CircleCheck as CheckCircle, Search, Plus } from 'lucide-react'
 
 const CATEGORY_COLORS = {
   Data: 'bg-[#e8f4fc] text-[#0063a3]',
@@ -19,6 +19,25 @@ const AUTH_COLORS = {
   api_key: 'bg-[#e8f4fc] text-[#0063a3]',
   basic: 'bg-[#f3f0fc] text-[#5b4fc0]',
   oauth2: 'bg-[#fdf2f1] text-[#c0392b]',
+}
+
+const CATEGORY_OPTIONS = ['Data', 'Document', 'Research', 'Visualization', 'NLP', 'Math', 'Language', 'general']
+const AUTH_OPTIONS = ['none', 'bearer', 'api_key', 'basic', 'oauth2']
+const STATUS_OPTIONS = ['active', 'inactive']
+
+const EMPTY_TOOL = {
+  name: '',
+  version: '1.0',
+  category: 'Data',
+  status: 'active',
+  description: '',
+  maintainer: '',
+  input_schema: {},
+  output_schema: {},
+  authentication: { type: 'none', notes: '', header: null, token_env_var: null },
+  rate_limits: { requests_per_minute: 60, daily_quota: 10000, burst_limit: 10, retry_after_header: 'Retry-After', throttle_policy: 'Fixed window per IP address' },
+  usage_policies: [],
+  tags: [],
 }
 
 function SchemaBlock({ data }) {
@@ -61,7 +80,6 @@ function ToolDrawer({ tool, onClose }) {
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-black/40" onClick={onClose} />
       <div className="w-full max-w-2xl bg-white h-full overflow-y-auto shadow-2xl flex flex-col slide-in">
-        {/* Header */}
         <div className="bg-[#002244] px-6 py-5 flex-shrink-0">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -87,7 +105,6 @@ function ToolDrawer({ tool, onClose }) {
         </div>
 
         <div className="p-5 space-y-4 flex-1">
-          {/* Overview */}
           <Section icon={Tag} title="Overview">
             <div className="space-y-3">
               <p className="text-sm text-[#3d4a55] leading-relaxed">{tool.description}</p>
@@ -111,17 +128,14 @@ function ToolDrawer({ tool, onClose }) {
             </div>
           </Section>
 
-          {/* Input Schema */}
           <Section icon={Code} title="Input Schema">
             <SchemaBlock data={tool.input_schema} />
           </Section>
 
-          {/* Output Schema */}
           <Section icon={Code} title="Output Schema">
             <SchemaBlock data={tool.output_schema} />
           </Section>
 
-          {/* Authentication */}
           <Section icon={Shield} title="Authentication Requirements">
             <div className="space-y-3">
               <div className="flex items-center gap-3">
@@ -145,7 +159,6 @@ function ToolDrawer({ tool, onClose }) {
             </div>
           </Section>
 
-          {/* Rate Limits */}
           <Section icon={AlertCircle} title="Rate Limits">
             <div className="grid grid-cols-2 gap-3">
               {Object.entries(tool.rate_limits).map(([key, value]) => (
@@ -159,7 +172,6 @@ function ToolDrawer({ tool, onClose }) {
             </div>
           </Section>
 
-          {/* Usage Policies */}
           <Section icon={BookOpen} title="Usage Policies">
             <ul className="space-y-2">
               {tool.usage_policies.map((policy, i) => (
@@ -171,6 +183,259 @@ function ToolDrawer({ tool, onClose }) {
             </ul>
           </Section>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function TagInput({ value, onChange, placeholder }) {
+  const [input, setInput] = useState('')
+
+  const add = () => {
+    const trimmed = input.trim()
+    if (trimmed && !value.includes(trimmed)) {
+      onChange([...value, trimmed])
+    }
+    setInput('')
+  }
+
+  const remove = (item) => onChange(value.filter(v => v !== item))
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <input
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
+          placeholder={placeholder}
+          className="flex-1 px-3 py-2 text-sm border border-[#d8dde2] rounded-lg focus:outline-none focus:border-[#009fda] focus:ring-1 focus:ring-[#009fda]/20 text-[#1a2430] placeholder:text-[#b0b8c1]"
+        />
+        <button type="button" onClick={add} className="px-3 py-2 bg-[#f0f4f8] border border-[#d8dde2] text-[#5c6670] text-xs font-medium rounded-lg hover:bg-[#e0e6eb] transition-colors">
+          Add
+        </button>
+      </div>
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {value.map((item, i) => (
+            <span key={i} className="flex items-center gap-1 px-2 py-0.5 bg-[#e8f4fc] text-[#0063a3] text-xs font-medium rounded-full">
+              {item}
+              <button type="button" onClick={() => remove(item)} className="hover:text-[#c0392b] transition-colors ml-0.5">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AddToolModal({ onClose, onAdd }) {
+  const [form, setForm] = useState(EMPTY_TOOL)
+  const [errors, setErrors] = useState({})
+
+  const set = (key, value) => setForm(f => ({ ...f, [key]: value }))
+  const setAuth = (key, value) => setForm(f => ({ ...f, authentication: { ...f.authentication, [key]: value } }))
+
+  const validate = () => {
+    const e = {}
+    if (!form.name.trim()) e.name = 'Name is required'
+    if (!form.maintainer.trim()) e.maintainer = 'Maintainer is required'
+    if (!form.description.trim()) e.description = 'Description is required'
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
+
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    if (!validate()) return
+    onAdd({
+      ...form,
+      id: `tool-custom-${Date.now()}`,
+    })
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        {/* Modal header */}
+        <div className="sticky top-0 bg-[#002244] px-6 py-4 rounded-t-2xl flex items-center justify-between z-10">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+              <Wrench className="w-4 h-4 text-[#40bfe8]" />
+            </div>
+            <div>
+              <h2 className="text-white font-bold text-base">Register New Tool</h2>
+              <p className="text-[#8a95a0] text-xs">Add an integration to the tools registry</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded hover:bg-white/10 text-[#8a95a0] hover:text-white transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Basic Info */}
+          <div>
+            <h3 className="text-xs font-bold text-[#002244] uppercase tracking-wider mb-4 flex items-center gap-2">
+              <Tag className="w-3.5 h-3.5 text-[#0063a3]" /> Basic Information
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-[#3d4a55] mb-1.5">Tool Name <span className="text-[#c0392b]">*</span></label>
+                <input
+                  value={form.name}
+                  onChange={e => set('name', e.target.value)}
+                  placeholder="e.g. Climate Data API"
+                  className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-1 text-[#1a2430] placeholder:text-[#b0b8c1] ${errors.name ? 'border-[#c0392b] focus:border-[#c0392b] focus:ring-[#c0392b]/20' : 'border-[#d8dde2] focus:border-[#009fda] focus:ring-[#009fda]/20'}`}
+                />
+                {errors.name && <p className="text-[#c0392b] text-xs mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.name}</p>}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#3d4a55] mb-1.5">Maintainer <span className="text-[#c0392b]">*</span></label>
+                <input
+                  value={form.maintainer}
+                  onChange={e => set('maintainer', e.target.value)}
+                  placeholder="e.g. Infrastructure Team"
+                  className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-1 text-[#1a2430] placeholder:text-[#b0b8c1] ${errors.maintainer ? 'border-[#c0392b] focus:border-[#c0392b] focus:ring-[#c0392b]/20' : 'border-[#d8dde2] focus:border-[#009fda] focus:ring-[#009fda]/20'}`}
+                />
+                {errors.maintainer && <p className="text-[#c0392b] text-xs mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.maintainer}</p>}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#3d4a55] mb-1.5">Version</label>
+                <input
+                  value={form.version}
+                  onChange={e => set('version', e.target.value)}
+                  placeholder="1.0"
+                  className="w-full px-3 py-2 text-sm border border-[#d8dde2] rounded-lg focus:outline-none focus:border-[#009fda] focus:ring-1 focus:ring-[#009fda]/20 text-[#1a2430] placeholder:text-[#b0b8c1]"
+                />
+              </div>
+
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-[#3d4a55] mb-1.5">Description <span className="text-[#c0392b]">*</span></label>
+                <textarea
+                  rows={3}
+                  value={form.description}
+                  onChange={e => set('description', e.target.value)}
+                  placeholder="What does this tool do and when should agents use it?"
+                  className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-1 text-[#1a2430] placeholder:text-[#b0b8c1] resize-none ${errors.description ? 'border-[#c0392b] focus:border-[#c0392b] focus:ring-[#c0392b]/20' : 'border-[#d8dde2] focus:border-[#009fda] focus:ring-[#009fda]/20'}`}
+                />
+                {errors.description && <p className="text-[#c0392b] text-xs mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3" />{errors.description}</p>}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#3d4a55] mb-1.5">Category</label>
+                <select
+                  value={form.category}
+                  onChange={e => set('category', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-[#d8dde2] rounded-lg focus:outline-none focus:border-[#009fda] focus:ring-1 focus:ring-[#009fda]/20 text-[#1a2430] bg-white"
+                >
+                  {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#3d4a55] mb-1.5">Status</label>
+                <select
+                  value={form.status}
+                  onChange={e => set('status', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-[#d8dde2] rounded-lg focus:outline-none focus:border-[#009fda] focus:ring-1 focus:ring-[#009fda]/20 text-[#1a2430] bg-white"
+                >
+                  {STATUS_OPTIONS.map(s => <option key={s} value={s} className="capitalize">{s}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Authentication */}
+          <div>
+            <h3 className="text-xs font-bold text-[#002244] uppercase tracking-wider mb-4 flex items-center gap-2">
+              <Shield className="w-3.5 h-3.5 text-[#0063a3]" /> Authentication
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-[#3d4a55] mb-1.5">Auth Type</label>
+                <select
+                  value={form.authentication.type}
+                  onChange={e => setAuth('type', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-[#d8dde2] rounded-lg focus:outline-none focus:border-[#009fda] focus:ring-1 focus:ring-[#009fda]/20 text-[#1a2430] bg-white"
+                >
+                  {AUTH_OPTIONS.map(a => <option key={a} value={a}>{a === 'none' ? 'None (Public)' : a}</option>)}
+                </select>
+              </div>
+              {form.authentication.type !== 'none' && (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#3d4a55] mb-1.5">Request Header</label>
+                    <input
+                      value={form.authentication.header || ''}
+                      onChange={e => setAuth('header', e.target.value || null)}
+                      placeholder="e.g. Authorization: Bearer"
+                      className="w-full px-3 py-2 text-sm border border-[#d8dde2] rounded-lg focus:outline-none focus:border-[#009fda] focus:ring-1 focus:ring-[#009fda]/20 text-[#1a2430] placeholder:text-[#b0b8c1] font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-[#3d4a55] mb-1.5">Env Variable</label>
+                    <input
+                      value={form.authentication.token_env_var || ''}
+                      onChange={e => setAuth('token_env_var', e.target.value || null)}
+                      placeholder="e.g. API_TOKEN"
+                      className="w-full px-3 py-2 text-sm border border-[#d8dde2] rounded-lg focus:outline-none focus:border-[#009fda] focus:ring-1 focus:ring-[#009fda]/20 text-[#1a2430] placeholder:text-[#b0b8c1] font-mono"
+                    />
+                  </div>
+                </>
+              )}
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-[#3d4a55] mb-1.5">Auth Notes</label>
+                <input
+                  value={form.authentication.notes}
+                  onChange={e => setAuth('notes', e.target.value)}
+                  placeholder="Additional notes about authentication..."
+                  className="w-full px-3 py-2 text-sm border border-[#d8dde2] rounded-lg focus:outline-none focus:border-[#009fda] focus:ring-1 focus:ring-[#009fda]/20 text-[#1a2430] placeholder:text-[#b0b8c1]"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Tags */}
+          <div>
+            <h3 className="text-xs font-bold text-[#002244] uppercase tracking-wider mb-3 flex items-center gap-2">
+              <Tag className="w-3.5 h-3.5 text-[#0063a3]" /> Tags
+            </h3>
+            <TagInput value={form.tags} onChange={v => set('tags', v)} placeholder="Type a tag and press Enter or Add" />
+          </div>
+
+          {/* Usage Policies */}
+          <div>
+            <h3 className="text-xs font-bold text-[#002244] uppercase tracking-wider mb-3 flex items-center gap-2">
+              <BookOpen className="w-3.5 h-3.5 text-[#0063a3]" /> Usage Policies
+            </h3>
+            <TagInput value={form.usage_policies} onChange={v => set('usage_policies', v)} placeholder="Type a policy and press Enter or Add" />
+          </div>
+
+          {/* Footer */}
+          <div className="flex items-center gap-3 pt-2 border-t border-[#eef0f2]">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2.5 border border-[#d8dde2] text-[#5c6670] text-sm font-medium rounded-xl hover:bg-[#f0f4f8] transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#009fda] text-white text-sm font-semibold rounded-xl hover:bg-[#0087bf] transition-colors shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Register Tool
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   )
@@ -204,7 +469,6 @@ function ToolCard({ tool, onSelect }) {
         <p className="text-xs text-[#5c6670] leading-relaxed mb-3 line-clamp-2">{tool.description}</p>
         <p className="text-[10px] text-[#8a95a0] font-medium mb-3">{tool.maintainer}</p>
 
-        {/* Auth + rate limit summary */}
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${authColor}`}>
             <Shield className="w-2.5 h-2.5" />
@@ -222,7 +486,6 @@ function ToolCard({ tool, onSelect }) {
           ))}
         </div>
 
-        {/* Policy count */}
         <div className="flex items-center gap-2 text-[10px] text-[#8a95a0] mb-4 border-t border-[#eef0f2] pt-3">
           <span className="flex items-center gap-1"><BookOpen className="w-3 h-3" />{tool.usage_policies?.length} usage policies</span>
           <span className="flex items-center gap-1"><Code className="w-3 h-3" />Schemas defined</span>
@@ -241,21 +504,56 @@ function ToolCard({ tool, onSelect }) {
 }
 
 export default function ToolsRegistry() {
+  const [tools, setTools] = useState(TOOLS)
   const [selected, setSelected] = useState(null)
+  const [showAdd, setShowAdd] = useState(false)
+  const [query, setQuery] = useState('')
+  const [filterCategory, setFilterCategory] = useState('all')
+  const [filterAuth, setFilterAuth] = useState('all')
+
+  const handleAdd = (tool) => {
+    setTools(prev => [tool, ...prev])
+  }
+
+  const filtered = useMemo(() => {
+    const q = query.toLowerCase()
+    return tools.filter(t => {
+      const matchesQuery = !q ||
+        t.name.toLowerCase().includes(q) ||
+        t.description.toLowerCase().includes(q) ||
+        t.maintainer.toLowerCase().includes(q) ||
+        t.tags?.some(tag => tag.toLowerCase().includes(q)) ||
+        t.category.toLowerCase().includes(q)
+      const matchesCategory = filterCategory === 'all' || t.category === filterCategory
+      const matchesAuth = filterAuth === 'all' || t.authentication?.type === filterAuth
+      return matchesQuery && matchesCategory && matchesAuth
+    })
+  }, [tools, query, filterCategory, filterAuth])
+
+  const usedCategories = useMemo(() => [...new Set(tools.map(t => t.category))], [tools])
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 w-full">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-[#002244]">Tools Registry</h1>
-        <p className="text-[#5c6670] text-sm mt-1">Approved integrations available to AI agents — including schemas, authentication, rate limits, and usage policies.</p>
+      <div className="flex items-start justify-between mb-8 gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-[#002244]">Tools Registry</h1>
+          <p className="text-[#5c6670] text-sm mt-1">Approved integrations available to AI agents — including schemas, authentication, rate limits, and usage policies.</p>
+        </div>
+        <button
+          onClick={() => setShowAdd(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-[#009fda] text-white text-sm font-semibold rounded-xl hover:bg-[#0087bf] transition-colors shadow-sm flex-shrink-0"
+        >
+          <Plus className="w-4 h-4" />
+          Add Tool
+        </button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-8">
         {[
-          { label: 'Total Tools', value: TOOLS.length, color: 'text-[#002244]' },
-          { label: 'Active', value: TOOLS.filter(t => t.status === 'active').length, color: 'text-[#00a651]' },
-          { label: 'Requires Auth', value: TOOLS.filter(t => t.authentication?.type !== 'none').length, color: 'text-[#c07800]' },
+          { label: 'Total Tools', value: tools.length, color: 'text-[#002244]' },
+          { label: 'Active', value: tools.filter(t => t.status === 'active').length, color: 'text-[#00a651]' },
+          { label: 'Requires Auth', value: tools.filter(t => t.authentication?.type !== 'none').length, color: 'text-[#c07800]' },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-white rounded-xl border border-[#d8dde2] px-5 py-4 text-center shadow-sm">
             <div className={`text-2xl font-bold ${color}`}>{value}</div>
@@ -264,14 +562,77 @@ export default function ToolsRegistry() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        {TOOLS.map(tool => (
-          <ToolCard key={tool.id} tool={tool} onSelect={setSelected} />
-        ))}
+      {/* Search + Filters */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8a95a0]" />
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search tools by name, category, maintainer, tags..."
+            className="w-full pl-9 pr-4 py-2.5 text-sm border border-[#d8dde2] rounded-xl focus:outline-none focus:border-[#009fda] focus:ring-1 focus:ring-[#009fda]/20 text-[#1a2430] placeholder:text-[#b0b8c1] bg-white"
+          />
+          {query && (
+            <button onClick={() => setQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8a95a0] hover:text-[#5c6670] transition-colors">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+        <select
+          value={filterCategory}
+          onChange={e => setFilterCategory(e.target.value)}
+          className="px-3 py-2.5 text-sm border border-[#d8dde2] rounded-xl focus:outline-none focus:border-[#009fda] bg-white text-[#3d4a55] min-w-[140px]"
+        >
+          <option value="all">All Categories</option>
+          {usedCategories.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select
+          value={filterAuth}
+          onChange={e => setFilterAuth(e.target.value)}
+          className="px-3 py-2.5 text-sm border border-[#d8dde2] rounded-xl focus:outline-none focus:border-[#009fda] bg-white text-[#3d4a55] min-w-[140px]"
+        >
+          <option value="all">All Auth Types</option>
+          {AUTH_OPTIONS.map(a => <option key={a} value={a}>{a === 'none' ? 'None (Public)' : a}</option>)}
+        </select>
       </div>
+
+      {/* Results count */}
+      {(query || filterCategory !== 'all' || filterAuth !== 'all') && (
+        <p className="text-xs text-[#8a95a0] mb-4">
+          {filtered.length} result{filtered.length !== 1 ? 's' : ''} found
+          {query && <span> for "<span className="font-medium text-[#3d4a55]">{query}</span>"</span>}
+        </p>
+      )}
+
+      {/* Grid */}
+      {filtered.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          {filtered.map(tool => (
+            <ToolCard key={tool.id} tool={tool} onSelect={setSelected} />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-[#f0f4f8] flex items-center justify-center mb-4">
+            <Search className="w-6 h-6 text-[#b0b8c1]" />
+          </div>
+          <p className="text-[#3d4a55] font-semibold text-sm">No tools found</p>
+          <p className="text-[#8a95a0] text-xs mt-1">Try adjusting your search or filters</p>
+          <button
+            onClick={() => { setQuery(''); setFilterCategory('all'); setFilterAuth('all') }}
+            className="mt-4 text-xs text-[#009fda] font-medium hover:underline"
+          >
+            Clear all filters
+          </button>
+        </div>
+      )}
 
       {selected && (
         <ToolDrawer tool={selected} onClose={() => setSelected(null)} />
+      )}
+
+      {showAdd && (
+        <AddToolModal onClose={() => setShowAdd(false)} onAdd={handleAdd} />
       )}
     </div>
   )
