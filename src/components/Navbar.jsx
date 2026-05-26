@@ -1,10 +1,11 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Bot, Wrench, MessageSquare, Globe } from 'lucide-react'
+import { Bot, Wrench, MessageSquare, Globe, BookOpen } from 'lucide-react'
 
 const navLinks = [
   { to: '/', label: 'Chat', icon: MessageSquare },
   { to: '/agents', label: 'Agent Registry', icon: Bot },
   { to: '/tools', label: 'Tools Registry', icon: Wrench },
+  { to: '/docs', label: 'Docs', icon: BookOpen },
 ]
 
 export default function Navbar() {
